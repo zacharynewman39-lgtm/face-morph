@@ -1,5 +1,5 @@
 import { FaceLandmarker } from './vendor/vision_bundle.mjs';
-import { GRID, inv as dispData, faceFrame as frameOf, buildField, drawShade } from './morph.js';
+import { GRID, inv as dispData, faceFrame as frameOf, buildField, drawShade } from './morph.js?v=2';
 
 // ---------------------------------------------------------------- settings
 

@@ -78,3 +78,4 @@ body.clean #viewport canvas { max-height: 100vh; }
   #panel { width: 100%; border-right: 0; border-top: 1px solid var(--line); }
   #stage { min-height: 50vh; }
 }
+.version { display: inline-block; margin-top: 6px; font-size: 11px; color: #fff; background: #2e7d4f; padding: 2px 8px; border-radius: 10px; }
