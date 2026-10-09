@@ -1,4 +1,5 @@
 import { FaceLandmarker } from './vendor/vision_bundle.mjs';
+import { GRID, inv as dispData, faceFrame as frameOf, buildField, drawShade } from './morph.js';
 
 // ---------------------------------------------------------------- settings
 
@@ -58,19 +59,19 @@ const EYE_COLORS = {
 
 const PRESETS = {
   'Reset': {},
-  'Natural': { jawWidth: 25, jawSquare: 20, cheekHollow: 30, cheekbones: 20, hunter: 25, tilt: 20,
-    underEye: 40, eyeWhite: 30, smooth: 35, contour: 30, highlight: 20, sharp: 20, limbal: 20 },
-  'Model': { jawWidth: 50, jawSquare: 40, chinLength: 15, cheekHollow: 60, cheekbones: 45, foreheadSmall: 20,
-    midface: 20, hunter: 50, tilt: 35, browLow: 25, underEye: 50, eyeWhite: 40, limbal: 40, noseSlim: 30,
-    lips: 20, lipColor: 25, smooth: 50, tan: 25, contour: 60, highlight: 35, sharp: 30, contrast: 10, warmth: 10 },
-  'Hunter eyes': { hunter: 90, tilt: 60, browLow: 50, underEye: 50, eyeWhite: 40, limbal: 40 },
-  'Max mog': { jawWidth: 70, jawSquare: 65, chinLength: 25, chinWidth: 20, cheekHollow: 80, cheekbones: 60,
-    foreheadSmall: 35, midface: 30, hunter: 80, tilt: 60, browLow: 45, underEye: 60, eyeWhite: 50,
-    limbal: 55, noseSlim: 40, noseShort: 20, lips: 25, lipColor: 30, smooth: 50, tan: 40, contour: 85,
-    highlight: 45, sharp: 40, contrast: 15, warmth: 10, saturation: 10 },
+  'Natural': { jawWidth: 25, jawSquare: 25, cheekHollow: 35, cheekbones: 20, hunter: 30, tilt: 25, browLow: 10,
+    underEye: 40, eyeWhite: 25, limbal: 20, smooth: 30, contour: 35, highlight: 25, sharp: 15 },
+  'Model': { jawWidth: 45, jawSquare: 45, chinLength: 15, cheekHollow: 60, cheekbones: 40, foreheadSmall: 20,
+    midface: 20, hunter: 55, tilt: 40, browLow: 25, underEye: 50, eyeWhite: 35, limbal: 35, noseSlim: 25,
+    lips: 15, lipColor: 15, smooth: 40, tan: 20, contour: 60, highlight: 40, sharp: 25, contrast: 8, warmth: 8 },
+  'Hunter eyes': { hunter: 85, tilt: 55, browLow: 35, underEye: 45, eyeWhite: 30, limbal: 35, contour: 20 },
+  'Max mog': { jawWidth: 60, jawSquare: 60, chinLength: 30, chinWidth: 25, cheekHollow: 85, cheekbones: 60,
+    foreheadSmall: 35, midface: 35, hunter: 85, tilt: 65, browLow: 45, underEye: 60, eyeWhite: 45,
+    limbal: 50, noseSlim: 40, noseShort: 20, lips: 20, lipColor: 20, smooth: 45, tan: 35, contour: 85,
+    highlight: 55, sharp: 35, contrast: 12, warmth: 10 },
 };
 
-const SETTINGS_KEY = 'facemorph.settings.v1';
+const SETTINGS_KEY = 'facemorph.settings.v2';
 const values = {};
 let eyeColor = 'none';
 for (const g of GROUPS) for (const [k] of g.items) values[k] = 0;
@@ -96,57 +97,6 @@ const EYE_L = [263, 249, 390, 373, 374, 380, 381, 382, 362, 398, 384, 385, 386, 
 const BROW_R = [70, 63, 105, 66, 107, 55, 65, 52, 53, 46];
 const BROW_L = [300, 293, 334, 296, 336, 285, 295, 282, 283, 276];
 const LIPS = [61, 146, 91, 181, 84, 17, 314, 405, 321, 375, 291, 409, 270, 269, 267, 0, 37, 39, 40, 185];
-const JAW_LOW = [172, 136, 150, 149, 176, 148, 152, 377, 400, 378, 379, 365, 397];
-
-// Each entry: [landmark ids, outward, downward, radius] in face-width units, applied per unit of slider.
-// "outward" points away from the face's vertical midline, so one entry covers both sides.
-const SHAPES = {
-  jawWidth: [
-    [[58, 288], 0.025, 0, 0.09], [[172, 397], 0.05, 0.01, 0.09], [[136, 365], 0.05, 0.005, 0.09],
-    [[150, 379], 0.03, 0, 0.08], [[149, 378], 0.015, 0, 0.07],
-  ],
-  jawSquare: [
-    [[150, 379], 0.04, 0.02, 0.08], [[149, 378], 0.03, 0.025, 0.08],
-    [[136, 365], 0.01, 0.02, 0.08], [[176, 400], 0.02, 0.02, 0.07],
-  ],
-  chinLength: [
-    [[152], 0, 0.05, 0.1], [[148, 377, 176, 400], 0, 0.04, 0.1], [[175], 0, 0.03, 0.08],
-  ],
-  chinWidth: [[[148, 377], 0.03, 0, 0.07], [[176, 400], 0.025, 0, 0.07]],
-  cheekHollow: [
-    [[187, 411], -0.035, 0, 0.09], [[147, 376], -0.04, 0, 0.09], [[213, 433], -0.035, 0, 0.09],
-    [[192, 416], -0.025, 0, 0.08], [[207, 427], -0.02, 0, 0.07],
-  ],
-  cheekbones: [
-    [[227, 447], 0.03, -0.01, 0.09], [[116, 345], 0.02, -0.015, 0.08], [[123, 352], 0.03, -0.005, 0.09],
-  ],
-  foreheadSmall: [
-    [[10], 0, 0.045, 0.14], [[109, 338], 0, 0.04, 0.13], [[67, 297], 0, 0.035, 0.12], [[103, 332], 0, 0.03, 0.11],
-  ],
-  midface: [
-    [[61, 291, 0, 17, 13, 14, 37, 267, 84, 314, 40, 270, 91, 321], 0, -0.02, 0.07], [[2, 94], 0, -0.008, 0.05],
-  ],
-  hunter: [
-    [[33, 263], 0, -0.015, 0.035], [[159, 386], 0, 0.02, 0.035], [[158, 385, 160, 387], 0, 0.017, 0.035],
-    [[157, 384, 161, 388], 0, 0.011, 0.03], [[145, 374], 0, -0.006, 0.03],
-    [[105, 334, 66, 296, 52, 282, 53, 283, 65, 295], 0, 0.02, 0.05], [[63, 293], 0, 0.018, 0.05],
-    [[107, 336, 70, 300], 0, 0.013, 0.05],
-  ],
-  tilt: [
-    [[33, 263, 130, 359], 0, -0.03, 0.04], [[246, 466, 7, 249], 0, -0.018, 0.035], [[133, 362], 0, 0.008, 0.03],
-  ],
-  browLow: [[[...BROW_R, ...BROW_L], 0, 0.025, 0.05]],
-  noseSlim: [
-    [[129, 358, 98, 327, 64, 294], -0.02, 0, 0.045], [[48, 278, 219, 439, 102, 331], -0.015, 0, 0.045],
-  ],
-  noseShort: [[[1, 4], 0, -0.02, 0.05], [[2, 94], 0, -0.012, 0.045], [[19], 0, -0.015, 0.045]],
-  lips: [
-    [[0, 37, 267, 39, 269, 40, 270], 0, -0.012, 0.04], [[185, 409], 0, -0.008, 0.04],
-    [[17, 84, 314, 181, 405, 91, 321], 0, 0.014, 0.04],
-  ],
-  mouthWidth: [[[61, 291], 0.02, 0, 0.045], [[185, 409, 146, 375], 0.01, 0, 0.04]],
-};
-
 // ---------------------------------------------------------------- DOM
 
 const $ = (id) => document.getElementById(id);
@@ -237,8 +187,6 @@ function refreshUI() {
 
 // ---------------------------------------------------------------- WebGL
 
-const MAXB = 40;
-const GRID = 128;
 
 const VS = `#version 300 es
 in vec2 aPos;
@@ -247,14 +195,11 @@ void main() { vUv = vec2(aPos.x * 0.5 + 0.5, 0.5 - aPos.y * 0.5); gl_Position = 
 
 const FS = `#version 300 es
 precision highp float;
-#define MAXB ${MAXB}
 in vec2 vUv;
 out vec4 outColor;
-uniform sampler2D uTex, uMask, uDisp;
+uniform sampler2D uTex, uMask, uDisp, uShade;
 uniform vec2 uRes;
 uniform vec4 uBox;          // displacement grid origin.xy, size.xy (pixels)
-uniform int uNB;
-uniform vec4 uBlob[MAXB];   // pos.xy, radius, strength
 uniform vec3 uIris[2];      // center.xy, radius
 uniform vec3 uIrisTint;
 uniform float uIrisAmt, uLimbal, uEyeWhite, uLipColor;
@@ -270,7 +215,7 @@ void main() {
   vec2 p = vUv * uRes;
   if (uSplit.y != 0.0) {
     float s = (p.x - uSplit.x) * uSplit.y;
-    if (abs(s) < 1.5) { outColor = vec4(1.0); return; }
+    if (abs(s) < 1.0) { outColor = vec4(1.0); return; }
     if (s < 0.0) { outColor = vec4(tex(p), 1.0); return; }
   }
   vec2 q = p;
@@ -282,10 +227,19 @@ void main() {
   if (uHasFace < 0.5) { outColor = vec4(c, 1.0); return; }
 
   vec4 m = texture(uMask, q / uRes);
+  vec3 sh = texture(uShade, q / uRes).rgb;
   float skin = m.r, eye = m.g, lip = m.b;
 
+  // Skin-colour likelihood near the face (lets neck shading and tan follow real skin, not the background).
+  float cb = -0.1687 * c.r - 0.3313 * c.g + 0.5 * c.b;
+  float cr = 0.5 * c.r - 0.4187 * c.g - 0.0813 * c.b;
+  float skinCol = smoothstep(0.015, 0.05, cr) * smoothstep(0.24, 0.16, cr) * smoothstep(-0.22, -0.12, cb) * smoothstep(0.04, -0.01, cb);
+  vec2 fd = (q - uFaceC) / uFaceW;
+  float nearSkin = max(skin, skinCol * exp(-dot(fd, fd) / 1.6));
+
+  // Retouch like frequency separation: even out blotches (low frequencies), keep pores (high frequencies).
   if (uSmooth > 0.001 && skin > 0.01) {
-    float rad = uFaceW * 0.016;
+    float rad = uFaceW * 0.018;
     vec3 sum = c; float ws = 1.0;
     for (int k = 0; k < 20; k++) {
       float fk = float(k);
@@ -293,36 +247,34 @@ void main() {
       vec2 o = vec2(cos(ang), sin(ang)) * rad * sqrt((fk + 0.5) / 20.0);
       vec3 s = tex(q + o);
       vec3 d = s - c;
-      float w = exp(-dot(d, d) * 60.0);
+      float w = exp(-dot(d, d) * 50.0);
       sum += s * w; ws += w;
     }
-    c = mix(c, sum / ws, clamp(uSmooth * skin, 0.0, 1.0));
+    vec3 low = sum / ws;
+    vec3 fine = (tex(q + vec2(1.2, 0.0)) + tex(q - vec2(1.2, 0.0)) + tex(q + vec2(0.0, 1.2)) + tex(q - vec2(0.0, 1.2))) * 0.25;
+    vec3 retouched = low + (c - fine) * 0.8;
+    c = mix(c, retouched, clamp(uSmooth * skin, 0.0, 1.0));
   }
 
   if (uSharp > 0.001) {
     vec3 b = (tex(q + vec2(1.5, 0.0)) + tex(q - vec2(1.5, 0.0)) + tex(q + vec2(0.0, 1.5)) + tex(q - vec2(0.0, 1.5))) * 0.25;
-    c += (c - b) * uSharp * 2.5 * (1.0 - 0.8 * skin * step(0.001, uSmooth));
+    c += (c - b) * uSharp * 2.0;
   }
 
-  float sh = 0.0;
-  for (int i = 0; i < MAXB; i++) {
-    if (i >= uNB) break;
-    vec2 d = q - uBlob[i].xy;
-    sh += uBlob[i].w * exp(-dot(d, d) / (uBlob[i].z * uBlob[i].z));
+  // Shadows multiply (texture stays), skin shadows go warmer and deeper like real light falloff.
+  float dark = sh.r * mix(0.45, 1.0, nearSkin);
+  c *= 1.0 - dark * vec3(0.5, 0.6, 0.66);
+  c += sh.g * (c * 0.32 + 0.035) * mix(0.3, 1.0, nearSkin);
+  if (sh.b > 0.001) {
+    float l = dot(c, LUM);
+    vec3 lifted = c * 1.16 + vec3(0.025, 0.015, 0.0);
+    lifted = mix(vec3(dot(lifted, LUM)), lifted, 0.9);
+    c = mix(c, lifted, sh.b * 0.75 * smoothstep(0.85, 0.4, l));
   }
-  sh = clamp(sh, -0.6, 0.6);
-  if (sh < 0.0) c *= 1.0 + sh * vec3(0.9, 1.0, 1.1);
-  else c += (1.0 - c) * sh * 0.5 + c * sh * 0.25;
 
   if (uTan != 0.0) {
-    float cb = -0.1687 * c.r - 0.3313 * c.g + 0.5 * c.b;
-    float cr = 0.5 * c.r - 0.4187 * c.g - 0.0813 * c.b;
-    float skinCol = smoothstep(0.015, 0.05, cr) * smoothstep(0.24, 0.16, cr) * smoothstep(-0.22, -0.12, cb) * smoothstep(0.04, -0.01, cb);
-    vec2 fd = (q - uFaceC) / uFaceW;
-    float region = exp(-dot(fd, fd) / 1.6);
-    float w = max(skin, skinCol * region);
     vec3 k = uTan > 0.0 ? vec3(0.16, 0.3, 0.5) : vec3(0.4, 0.38, 0.33);
-    c = mix(c, pow(max(c, 0.0), 1.0 + uTan * k), w);
+    c = mix(c, pow(max(c, 0.0), 1.0 + uTan * k), nearSkin);
   }
 
   if (eye > 0.01) {
@@ -340,8 +292,8 @@ void main() {
       c *= 1.0 - uLimbal * 0.6 * smoothstep(0.72, 0.95, d) * smoothstep(1.2, 0.98, d) * eye;
     }
     float l = dot(c, LUM);
-    vec3 white = min(mix(c, vec3(l), 0.55) * 1.18 + 0.04, vec3(1.0));
-    c = mix(c, white, uEyeWhite * eye * (1.0 - irisW));
+    vec3 white = min(mix(c, vec3(l), 0.5) * 1.12 + 0.03, vec3(1.0));
+    c = mix(c, white, uEyeWhite * eye * (1.0 - irisW) * smoothstep(0.2, 0.45, l));
   }
 
   if (lip > 0.01 && uLipColor > 0.001) {
@@ -356,11 +308,11 @@ void main() {
   outColor = vec4(clamp(c, 0.0, 1.0), 1.0);
 }`;
 
-let gl, prog, uni = {}, texSrc, texMask, texDisp;
+let gl, prog, uni = {}, texSrc, texMask, texDisp, texShade;
 const maskCanvas = document.createElement('canvas');
 const mctx = maskCanvas.getContext('2d');
-const dispData = new Float32Array(GRID * GRID * 2);
-const dispW = new Float32Array(GRID * GRID);
+const shadeCanvas = document.createElement('canvas');
+const sctx = shadeCanvas.getContext('2d');
 
 function initGL() {
   gl = glCanvas.getContext('webgl2', { preserveDrawingBuffer: true, premultipliedAlpha: false, antialias: false });
@@ -402,10 +354,12 @@ function initGL() {
   texSrc = mk(gl.LINEAR);
   texMask = mk(gl.LINEAR);
   texDisp = mk(gl.LINEAR);
+  texShade = mk(gl.LINEAR);
   gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
   gl.uniform1i(uni.uTex, 0);
   gl.uniform1i(uni.uMask, 1);
   gl.uniform1i(uni.uDisp, 2);
+  gl.uniform1i(uni.uShade, 3);
 }
 
 // ---------------------------------------------------------------- tracking
@@ -474,107 +428,6 @@ function track() {
 // ---------------------------------------------------------------- warp + effects
 
 const P = (i) => [pts[2 * i], pts[2 * i + 1]];
-const lerp = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
-
-function faceFrame() {
-  const a = P(234), b = P(454);
-  const W = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
-  const ax = [(b[0] - a[0]) / W, (b[1] - a[1]) / W];
-  const ay = [-ax[1], ax[0]];
-  const C = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
-  return { W, ax, ay, C };
-}
-
-function buildControls(F) {
-  const { W, ax, ay, C } = F;
-  const acc = new Map(); // landmark -> [dx, dy, r]
-  const add = (i, dx, dy, r) => {
-    const e = acc.get(i);
-    if (e) { e[0] += dx; e[1] += dy; e[2] = Math.max(e[2], r); } else acc.set(i, [dx, dy, r]);
-  };
-  for (const key in SHAPES) {
-    const v = values[key] / 100;
-    if (!v) continue;
-    for (const [ids, out, down, r] of SHAPES[key]) {
-      for (const i of ids) {
-        const p = P(i);
-        const side = Math.sign((p[0] - C[0]) * ax[0] + (p[1] - C[1]) * ax[1]);
-        const o = out * side * v * W, d = down * v * W;
-        add(i, o * ax[0] + d * ay[0], o * ax[1] + d * ay[1], r * W);
-      }
-    }
-  }
-  const es = values.eyeSize / 100;
-  if (es) {
-    for (const eye of [EYE_R, EYE_L]) {
-      let cx = 0, cy = 0;
-      for (const i of eye) { cx += pts[2 * i]; cy += pts[2 * i + 1]; }
-      cx /= eye.length; cy /= eye.length;
-      for (const i of eye) add(i, (pts[2 * i] - cx) * 0.3 * es, (pts[2 * i + 1] - cy) * 0.3 * es, 0.04 * W);
-    }
-  }
-  return acc;
-}
-
-// Inverse-warp displacement field over a box around the face: for an output pixel p,
-// the source pixel is p - D(p), with D a normalized sum of Gaussians centred on the moved points.
-function buildDisplacement(F) {
-  const acc = buildControls(F);
-  const S = F.W * 2.2;
-  const box = [F.C[0] - S / 2, F.C[1] - S / 2 + F.W * 0.1, S, S];
-  dispData.fill(0);
-  dispW.fill(0);
-  const cell = S / GRID;
-  for (const [i, [dx, dy, r]] of acc) {
-    const tx = pts[2 * i] + dx, ty = pts[2 * i + 1] + dy;
-    const reach = r * 2.8;
-    const gx0 = Math.max(0, Math.floor((tx - reach - box[0]) / cell));
-    const gx1 = Math.min(GRID - 1, Math.ceil((tx + reach - box[0]) / cell));
-    const gy0 = Math.max(0, Math.floor((ty - reach - box[1]) / cell));
-    const gy1 = Math.min(GRID - 1, Math.ceil((ty + reach - box[1]) / cell));
-    const inv = 1 / (r * r);
-    for (let gy = gy0; gy <= gy1; gy++) {
-      const py = box[1] + (gy + 0.5) * cell - ty;
-      for (let gx = gx0; gx <= gx1; gx++) {
-        const px = box[0] + (gx + 0.5) * cell - tx;
-        const w = Math.exp(-(px * px + py * py) * inv);
-        const k = gy * GRID + gx;
-        dispData[2 * k] += w * dx;
-        dispData[2 * k + 1] += w * dy;
-        dispW[k] += w;
-      }
-    }
-  }
-  for (let k = 0; k < GRID * GRID; k++) {
-    if (dispW[k] > 1) { dispData[2 * k] /= dispW[k]; dispData[2 * k + 1] /= dispW[k]; }
-  }
-  return box;
-}
-
-function buildBlobs(F) {
-  const { W, ay } = F;
-  const blobs = [];
-  const blob = (p, r, s) => { if (s) blobs.push(p[0], p[1], r * W, s); };
-  const c = values.contour / 100, h = Math.max(0, values.cheekHollow / 100);
-  const hollow = -(0.22 * c + 0.14 * h);
-  for (const [a, b] of [[123, 147], [352, 376]]) {
-    for (const t of [0.45, 1]) blob(lerp(P(a), P(b), t), 0.06, hollow * 0.75);
-  }
-  for (const i of JAW_LOW) {
-    const p = P(i);
-    blob([p[0] + ay[0] * W * 0.05, p[1] + ay[1] * W * 0.05], 0.05, -0.13 * c);
-  }
-  const hl = values.highlight / 100;
-  for (const i of [117, 346]) { const p = P(i); blob([p[0] - ay[0] * W * 0.015, p[1] - ay[1] * W * 0.015], 0.05, 0.13 * hl); }
-  blob(P(6), 0.025, 0.08 * hl);
-  blob(P(197), 0.025, 0.08 * hl);
-  blob(P(175), 0.035, 0.07 * hl);
-  blob(P(151), 0.08, 0.05 * hl);
-  const u = values.underEye / 100;
-  for (const i of [230, 450]) blob(P(i), 0.035, 0.11 * u);
-  for (const i of [231, 451, 229, 449]) blob(P(i), 0.03, 0.06 * u);
-  return new Float32Array(blobs.slice(0, MAXB * 4));
-}
 
 function drawMask(F) {
   const mw = maskCanvas.width, mh = maskCanvas.height;
@@ -613,6 +466,8 @@ function resizeTo(w, h) {
   glCanvas.height = overlay.height = ch;
   maskCanvas.width = Math.round(cw / 2);
   maskCanvas.height = Math.round(ch / 2);
+  shadeCanvas.width = maskCanvas.width;
+  shadeCanvas.height = maskCanvas.height;
   gl.viewport(0, 0, cw, ch);
   pts = null;
 }
@@ -644,8 +499,8 @@ function render() {
   const hasFace = !!pts;
   gl.uniform1f(uni.uHasFace, hasFace ? 1 : 0);
   if (hasFace) {
-    const F = faceFrame();
-    const box = buildDisplacement(F);
+    const F = frameOf(pts);
+    const box = buildField(pts, values, F);
     gl.activeTexture(gl.TEXTURE2);
     gl.bindTexture(gl.TEXTURE_2D, texDisp);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RG16F, GRID, GRID, 0, gl.RG, gl.FLOAT, dispData);
@@ -654,11 +509,14 @@ function render() {
     drawMask(F);
     gl.activeTexture(gl.TEXTURE1);
     gl.bindTexture(gl.TEXTURE_2D, texMask);
+    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, maskCanvas);
 
-    const blobs = buildBlobs(F);
-    gl.uniform1i(uni.uNB, blobs.length / 4);
-    if (blobs.length) gl.uniform4fv(uni.uBlob, blobs);
+    drawShade(sctx, pts, values, F, shadeCanvas.width / W, shadeCanvas.height / H);
+    gl.activeTexture(gl.TEXTURE3);
+    gl.bindTexture(gl.TEXTURE_2D, texShade);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, shadeCanvas);
+    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
 
     const iris = (c, ring) => {
       const p = P(c);
