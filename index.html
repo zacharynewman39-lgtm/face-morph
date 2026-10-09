@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Face Morph Studio</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+  <aside id="panel">
+    <header>
+      <h1>Face Morph Studio</h1>
+      <p class="sub">Live face tracking and morphing. Nothing leaves your computer.</p>
+    </header>
+
+    <section>
+      <h2>1. Pick a source</h2>
+      <div class="row">
+        <button id="btnCam" class="primary">Webcam (live)</button>
+        <label class="btn">Upload video<input id="fileVideo" type="file" accept="video/*" hidden></label>
+        <label class="btn">Upload photo<input id="fileImage" type="file" accept="image/*" hidden></label>
+      </div>
+      <select id="camSelect" hidden></select>
+    </section>
+
+    <section>
+      <h2>2. Pick a preset (or use the sliders)</h2>
+      <div class="row wrap" id="presets"></div>
+    </section>
+
+    <div id="sliders"></div>
+
+    <section>
+      <h2>View</h2>
+      <label class="check"><input type="checkbox" id="optSplit"> Before / after split</label>
+      <label class="check"><input type="checkbox" id="optMesh"> Show tracking points</label>
+      <label class="check"><input type="checkbox" id="optMirror" checked> Mirror (like a selfie)</label>
+      <div class="slider"><span>Stabilization</span><input type="range" id="optStab" min="0" max="100" value="60"><output></output></div>
+      <button id="btnClean">Clean screen for OBS / video calls</button>
+      <button id="btnHelp" class="link">How do I use this on OmeTV / Discord / Zoom?</button>
+    </section>
+
+    <section>
+      <h2>Save</h2>
+      <div class="row wrap">
+        <button id="btnSnap">Save photo</button>
+        <button id="btnRec">Start recording</button>
+        <button id="btnExport" hidden>Export whole video</button>
+      </div>
+      <p id="recStatus" class="hint"></p>
+    </section>
+  </aside>
+
+  <main id="stage">
+    <div id="viewport">
+      <canvas id="gl"></canvas>
+      <canvas id="overlay"></canvas>
+      <div id="splitHandle" hidden></div>
+    </div>
+    <div id="status">Loading face tracker…</div>
+    <div id="welcome">
+      <h2>Start here</h2>
+      <p>Click <b>Webcam (live)</b> to morph yourself in real time, or upload a video or photo.</p>
+    </div>
+  </main>
+</div>
+
+<div id="help" class="modal" hidden>
+  <div class="card">
+    <h2>Use the morph as your camera on OmeTV, Discord, Zoom, etc.</h2>
+    <p>A website can't turn itself into a webcam, so you use the free program <b>OBS Studio</b> to pass this window along as a "virtual camera". One-time setup, about 5 minutes:</p>
+    <ol>
+      <li>Download and install OBS Studio from <b>obsproject.com</b>.</li>
+      <li>Here, click <b>Webcam (live)</b>, pick your settings, then click <b>Clean screen for OBS</b>. Only your morphed face shows now. (Press <b>Esc</b> to get the controls back.)</li>
+      <li>In OBS, under <b>Sources</b> click <b>+</b> &rarr; <b>Window Capture</b> (Mac: <b>macOS Screen Capture</b> &rarr; Window) and choose this browser window. Right-click the source &rarr; <b>Transform</b> &rarr; <b>Fit to screen</b>.</li>
+      <li>In OBS click <b>Start Virtual Camera</b> (bottom right).</li>
+      <li>On OmeTV / Discord / Zoom, open the camera setting and choose <b>OBS Virtual Camera</b>.</li>
+    </ol>
+    <p class="hint">Turn <b>Mirror</b> off before you start so text and your movements look normal to the other person. Keep this browser window open (it can be behind other windows, just not minimized).</p>
+    <button id="helpClose" class="primary">Got it</button>
+  </div>
+</div>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>
